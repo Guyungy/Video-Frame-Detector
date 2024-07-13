@@ -24,13 +24,13 @@ labels = ["safe_for_work", "not_safe_for_work"]
 nsfw_threshold = 0.5  # 设置阈值，超过该值认为是NSFW
 
 # 指定目录路径
-root_dir = r"E:\抖音\不是你的胖头鱼\新建文件夹"
+root_dir = r"D:\测试"
 
 # 支持的视频文件扩展名
 video_extensions = ['.mp4', '.mov', '.avi', '.mkv']
 
 # 跳过和处理的时间间隔（秒）
-skip_seconds = 1  # 每次跳过1秒
+skip_seconds = 3  # 每次跳过1秒
 frames_to_process = 1  # 每次处理1帧
 
 def convert_frame_to_time(frame_number, fps):
