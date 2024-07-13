@@ -5,28 +5,32 @@ from queue import Queue, Empty
 from transformers import AutoImageProcessor, AutoModelForImageClassification
 from PIL import Image
 import torch
+import logging
+
+# 设置日志记录
+logging.basicConfig(level=logging.INFO)
 
 # 检查是否有可用的GPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {device}")
+logging.info(f"Using device: {device}")
 
 # 加载处理器和模型，并将模型移到GPU
 processor = AutoImageProcessor.from_pretrained("Falconsai/nsfw_image_detection")
 model = AutoModelForImageClassification.from_pretrained("Falconsai/nsfw_image_detection").to(device)
-print(f"Model device: {next(model.parameters()).device}")
+logging.info(f"Model device: {next(model.parameters()).device}")
 
 # 定义类别名称和NSFW阈值
 labels = ["safe_for_work", "not_safe_for_work"]
-nsfw_threshold = 0.5  # 设置阈值，超过该值认为是NSFW
+nsfw_threshold = 0.3  # 设置阈值，超过该值认为是NSFW
 
 # 指定目录路径
-root_dir = r"C:\Users\diriw\Downloads\新建文件夹"
+root_dir = r"E:\抖音\不是你的胖头鱼\新建文件夹"
 
 # 支持的视频文件扩展名
 video_extensions = ['.mp4', '.mov', '.avi', '.mkv']
 
 # 跳过和处理的时间间隔（秒）
-skip_seconds = 3  # 每次跳过1秒
+skip_seconds = 5  # 每次跳过1秒
 frames_to_process = 1  # 每次处理1帧
 
 def process_frames(frames, video_path, output_dir, base_frame_count):
@@ -39,14 +43,15 @@ def process_frames(frames, video_path, output_dir, base_frame_count):
 
     for i, prob in enumerate(nsfw_probs):
         frame_id = base_frame_count + i
-        print(f"Video {video_path}, Frame {frame_id} - NSFW Probability: {prob}")
+        logging.info(f"Video {video_path}, Frame {frame_id} - NSFW Probability: {prob}")
         if prob > nsfw_threshold:
-            screenshot_path = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(video_path))[0]}_nsfw_frame_{frame_id}.jpg")
+            prob_str = f"{prob:.3f}".split('.')[1]  # 获取NSFW概率的小数部分
+            screenshot_path = os.path.join(output_dir, f"{prob_str.zfill(3)}_{os.path.splitext(os.path.basename(video_path))[0]}_nsfw_frame_{frame_id}.jpg")
             try:
                 frames[i].save(screenshot_path)
-                print(f"NSFW frame saved at: {screenshot_path}")
+                logging.info(f"NSFW frame saved at: {screenshot_path}")
             except Exception as e:
-                print(f"Error saving frame {frame_id}: {e}")
+                logging.error(f"Error saving frame {frame_id}: {e}")
 
 def frame_extraction_worker(video_path, frame_queue, skip_frames, process_frames_count):
     cap = cv2.VideoCapture(video_path)
@@ -96,7 +101,7 @@ for subdir, dirs, files in os.walk(root_dir):
                         break
                     process_frames(frames, video_path, output_dir, base_frame_count - len(frames))
                 except Empty:
-                    print("Queue is empty. Exiting.")
+                    logging.warning("Queue is empty. Exiting.")
                     break
 
             extraction_thread.join()
