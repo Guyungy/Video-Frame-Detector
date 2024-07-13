@@ -1,10 +1,11 @@
-import cv2
 import os
+import json
+import torch
+import cv2
 import threading
 from queue import Queue, Empty
 from transformers import AutoImageProcessor, AutoModelForImageClassification
 from PIL import Image
-import torch
 import logging
 
 # 设置日志记录
@@ -14,31 +15,43 @@ logging.basicConfig(level=logging.INFO)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 logging.info(f"Using device: {device}")
 
+# 配置参数
+config = {
+    "pretrained_model_name": "Falconsai/nsfw_image_detection",
+    "model_path": r"C:/Users/diriw/Documents/code/NSFW Video Frame Detector/model",
+    "labels": ["safe_for_work", "not_safe_for_work"],
+    "nsfw_threshold": 0.5,
+    "root_dir": r"E:\抖音\给我片海苔\新建文件夹",
+    "video_extensions": [".mp4", ".mov", ".avi", ".mkv"],
+    "skip_seconds": 3,
+    "frames_to_process": 1
+}
+
 # 加载处理器和模型，并将模型移到GPU
-processor = AutoImageProcessor.from_pretrained("Falconsai/nsfw_image_detection")
-model = AutoModelForImageClassification.from_pretrained("Falconsai/nsfw_image_detection").to(device)
+processor = AutoImageProcessor.from_pretrained(config['pretrained_model_name'])
+model = AutoModelForImageClassification.from_pretrained(config['model_path'], local_files_only=True).to(device)
 logging.info(f"Model device: {next(model.parameters()).device}")
 
 # 定义类别名称和NSFW阈值
-labels = ["safe_for_work", "not_safe_for_work"]
-nsfw_threshold = 0.5  # 设置阈值，超过该值认为是NSFW
+labels = config['labels']
+nsfw_threshold = config['nsfw_threshold']
 
 # 指定目录路径
-root_dir = r"E:\抖音\白朵拉"
+root_dir = config['root_dir']
 
 # 支持的视频文件扩展名
-video_extensions = ['.mp4', '.mov', '.avi', '.mkv']
+video_extensions = config['video_extensions']
 
 # 跳过和处理的时间间隔（秒）
-skip_seconds = 3  # 每次跳过1秒
-frames_to_process = 1  # 每次处理1帧
+skip_seconds = config['skip_seconds']
+frames_to_process = config['frames_to_process']
 
 def convert_frame_to_time(frame_number, fps):
     total_seconds = frame_number / fps
     hours = int(total_seconds // 3600)
     minutes = int((total_seconds % 3600) // 60)
-    seconds = int(total_seconds % 60)
-    return f"{hours:02d};{minutes:02d};{seconds:02d}"
+    seconds = int((total_seconds % 60))
+    return f"{hours:02d}_{minutes:02d}_{seconds:02d}"  # 使用下划线替换冒号
 
 def process_frames(frames, video_path, output_dir, base_frame_count, fps):
     inputs = processor(images=frames, return_tensors="pt").to(device)
@@ -85,33 +98,39 @@ def frame_extraction_worker(video_path, frame_queue, skip_frames, process_frames
     frame_queue.put((None, None))  # Sentinel to signal end of video
 
 # 遍历指定目录及其子目录中的所有视频文件
-for subdir, dirs, files in os.walk(root_dir):
-    for file in files:
-        if any(file.lower().endswith(ext) for ext in video_extensions):
-            video_path = os.path.join(subdir, file)
-            output_dir = subdir
-            os.makedirs(output_dir, exist_ok=True)
+def process_directory(root_dir):
+    for subdir, dirs, files in os.walk(root_dir):
+        logging.info(f"Processing directory: {subdir}")  # 日志输出当前处理的目录
+        for file in files:
+            if any(file.lower().endswith(ext) for ext in video_extensions):
+                video_path = os.path.join(subdir, file)
+                logging.info(f"Found video file: {video_path}")  # 日志输出找到的视频文件
+                output_dir = subdir
+                os.makedirs(output_dir, exist_ok=True)
 
-            # 获取视频的帧率
-            cap = cv2.VideoCapture(video_path)
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            skip_frames = int(fps * skip_seconds)
-            cap.release()
+                # 获取视频的帧率
+                cap = cv2.VideoCapture(video_path)
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                skip_frames = int(fps * skip_seconds)
+                cap.release()
 
-            frame_queue = Queue(maxsize=10)
-            extraction_thread = threading.Thread(target=frame_extraction_worker, args=(video_path, frame_queue, skip_frames, frames_to_process))
-            extraction_thread.start()
+                frame_queue = Queue(maxsize=10)
+                extraction_thread = threading.Thread(target=frame_extraction_worker, args=(video_path, frame_queue, skip_frames, frames_to_process))
+                extraction_thread.start()
 
-            while True:
-                try:
-                    frames, base_frame_count = frame_queue.get(timeout=30)  # 设定超时来防止阻塞
-                    if frames is None:
+                while True:
+                    try:
+                        frames, base_frame_count = frame_queue.get(timeout=30)  # 设定超时来防止阻塞
+                        if frames is None:
+                            break
+                        process_frames(frames, video_path, output_dir, base_frame_count - len(frames), fps)
+                    except Empty:
+                        logging.warning("Queue is empty. Exiting.")
                         break
-                    process_frames(frames, video_path, output_dir, base_frame_count - len(frames), fps)
-                except Empty:
-                    logging.warning("Queue is empty. Exiting.")
-                    break
 
-            extraction_thread.join()
+                extraction_thread.join()
 
-cv2.destroyAllWindows()
+    cv2.destroyAllWindows()
+
+# 调用处理函数
+process_directory(root_dir)
