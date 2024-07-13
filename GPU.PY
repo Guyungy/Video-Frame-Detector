@@ -21,7 +21,7 @@ logging.info(f"Model device: {next(model.parameters()).device}")
 
 # 定义类别名称和NSFW阈值
 labels = ["safe_for_work", "not_safe_for_work"]
-nsfw_threshold = 0.3  # 设置阈值，超过该值认为是NSFW
+nsfw_threshold = 0.5  # 设置阈值，超过该值认为是NSFW
 
 # 指定目录路径
 root_dir = r"E:\抖音\不是你的胖头鱼\新建文件夹"
@@ -30,10 +30,17 @@ root_dir = r"E:\抖音\不是你的胖头鱼\新建文件夹"
 video_extensions = ['.mp4', '.mov', '.avi', '.mkv']
 
 # 跳过和处理的时间间隔（秒）
-skip_seconds = 5  # 每次跳过1秒
+skip_seconds = 1  # 每次跳过1秒
 frames_to_process = 1  # 每次处理1帧
 
-def process_frames(frames, video_path, output_dir, base_frame_count):
+def convert_frame_to_time(frame_number, fps):
+    total_seconds = frame_number / fps
+    hours = int(total_seconds // 3600)
+    minutes = int((total_seconds % 3600) // 60)
+    seconds = int(total_seconds % 60)
+    return f"{hours:02d};{minutes:02d};{seconds:02d}"
+
+def process_frames(frames, video_path, output_dir, base_frame_count, fps):
     inputs = processor(images=frames, return_tensors="pt").to(device)
     with torch.no_grad():
         outputs = model(**inputs)
@@ -46,7 +53,8 @@ def process_frames(frames, video_path, output_dir, base_frame_count):
         logging.info(f"Video {video_path}, Frame {frame_id} - NSFW Probability: {prob}")
         if prob > nsfw_threshold:
             prob_str = f"{prob:.3f}".split('.')[1]  # 获取NSFW概率的小数部分
-            screenshot_path = os.path.join(output_dir, f"{prob_str.zfill(3)}_{os.path.splitext(os.path.basename(video_path))[0]}_nsfw_frame_{frame_id}.jpg")
+            time_str = convert_frame_to_time(frame_id, fps)
+            screenshot_path = os.path.join(output_dir, f"{prob_str.zfill(3)}_{os.path.splitext(os.path.basename(video_path))[0]}_nsfw_{time_str}.jpg")
             try:
                 frames[i].save(screenshot_path)
                 logging.info(f"NSFW frame saved at: {screenshot_path}")
@@ -99,7 +107,7 @@ for subdir, dirs, files in os.walk(root_dir):
                     frames, base_frame_count = frame_queue.get(timeout=30)  # 设定超时来防止阻塞
                     if frames is None:
                         break
-                    process_frames(frames, video_path, output_dir, base_frame_count - len(frames))
+                    process_frames(frames, video_path, output_dir, base_frame_count - len(frames), fps)
                 except Empty:
                     logging.warning("Queue is empty. Exiting.")
                     break
