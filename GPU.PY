@@ -24,7 +24,7 @@ labels = ["safe_for_work", "not_safe_for_work"]
 nsfw_threshold = 0.5  # 设置阈值，超过该值认为是NSFW
 
 # 指定目录路径
-root_dir = r"D:\测试"
+root_dir = r"E:\抖音\闻闻"
 
 # 支持的视频文件扩展名
 video_extensions = ['.mp4', '.mov', '.avi', '.mkv']
