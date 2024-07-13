@@ -12,7 +12,7 @@ model = AutoModelForImageClassification.from_pretrained("Falconsai/nsfw_image_de
 labels = ["safe_for_work", "not_safe_for_work"]
 
 # 指定目录路径
-root_dir = r"H:\DouyinLive\悲伤西红柿🍅"
+root_dir = r"H:\DouyinLive\@脸圆圆"
 
 # 支持的视频文件扩展名
 video_extensions = ['.mp4', '.mov', '.avi', '.mkv']
@@ -29,6 +29,10 @@ for subdir, dirs, files in os.walk(root_dir):
             cap = cv2.VideoCapture(video_path)
             frame_count = 0
 
+            # 获取视频的帧率
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            interval = int(fps * 3)  # 每3秒检测一次
+
             while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
@@ -36,7 +40,7 @@ for subdir, dirs, files in os.walk(root_dir):
 
                 frame_count += 1
                 # 每间隔一定帧数进行一次检测
-                if frame_count % 30 == 0:  # 可以根据需要调整间隔帧数
+                if frame_count % interval == 0:
                     # 将帧转换为PIL图像
                     image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
